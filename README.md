@@ -1,1 +1,2 @@
 # fintrace
+> Early development
