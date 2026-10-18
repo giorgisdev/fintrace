@@ -1,4 +1,7 @@
+<img width="1024" height="254" alt="image" src="https://github.com/user-attachments/assets/908cf838-08cb-4a20-a991-7b3321b8a299" />
+
 # Fintrace
+
 > Early development
 
 Bookkeeping software for local businesses. Upload receipts, invoices, bank statements and other transactional documents. Fintrace extracts data from image files and PDFs to automate the process of calculating expenses and payroll.
