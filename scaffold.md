@@ -4,7 +4,7 @@ The plan for the Fintrace MVP: reading numbers off bank statement PNGs and turni
 
 ## Goal of the MVP
 
-Upload a PNG of a bank statement and get back a list of transactions (date, description, amount, balance), each linked to the source image. Every number should be checkable: if the extracted rows don't add up, we say so rather than silently store wrong data.
+Upload a file(docx, pdf, doc, png, jpeg, heic) of a bank statement and get back a list of transactions (date, description, amount, balance), each linked to the source image. Every number should be checkable: if the extracted rows don't add up, we say so rather than silently store wrong data.
 
 ## Stack
 
