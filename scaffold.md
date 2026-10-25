@@ -1,6 +1,6 @@
 # Scaffold
 
-The plan for the Fintrace MVP: reading numbers off bank statement PNGs and turning them into structured, searchable transactions. This file covers the OCR tech stack, the pipeline and the build order. Receipts, invoices, PDFs, payroll, login and the frontend come later.
+The plan for the Fintrace MVP: reading numbers off bank statements and turning them into structured, searchable transactions. We start with PDF statements (see [Current milestone](#current-milestone-pdf-ocr)). This file covers the OCR tech stack, the pipeline and the build order. Receipts, invoices, payroll, login, mobile and the frontend come later.
 
 ## Goal of the MVP
 
@@ -18,7 +18,7 @@ Upload a file(docx, pdf, doc, png, jpeg, heic) of a bank statement and get back 
 | Database | SQLite first, PostgreSQL later | SQLite needs no setup, so we can start in minutes. SQLAlchemy and Alembic keep the move to Postgres to a config change. |
 | ORM and migrations | SQLAlchemy and Alembic | One model definition for both databases, with versioned schema changes. |
 | Tests | pytest | Standard, and our parser can be tested without running OCR at all. |
-| PDFs (later) | PyMuPDF or pdfplumber | Text-based PDFs can skip OCR entirely and be read directly. Decide when we reach that milestone. |
+| PDFs | PyMuPDF (`pymupdf`) | Renders each PDF page to an image for OCR. Installs with pip, with no system dependency like poppler. Text-based PDFs could later skip OCR and be read directly. |
 
 ### Why Tesseract and not an LLM vision API
 
@@ -44,6 +44,71 @@ Upload -> ImageStore -> ImagePreprocessor -> OcrEngine -> StatementParser -> Tra
 5. **TransactionValidator:** checks that opening balance plus the transactions equals the closing balance, and that each row's running balance follows from the previous one. A failed check flags the document for review. This is our main guard against OCR misreads such as `8` read as `3`.
 6. **Repositories:** the only layer that talks to the database, so storage can change without touching the logic above it.
 7. **API:** thin routes that call a `DocumentService`.
+
+## Current milestone: PDF OCR
+
+The first working slice of the pipeline: give it a PDF, get back all the text it sees.
+
+**Scope**
+
+- **Input:** PDF files only. Other formats (PNG, JPEG, HEIC, DOCX, DOC) come later. Files are checked by their contents (`%PDF-` signature), not their extension.
+- **Stages built:** the first three pipeline steps only, `ImageStore -> ImagePreprocessor -> OcrEngine`.
+  - `ImageStore` saves the original to `data/uploads/<sha256>.pdf` and dedupes by content hash.
+  - `ImagePreprocessor` renders every page at 300 DPI with PyMuPDF, converts to grayscale, deskews (projection-profile search within ±10°) and thresholds (Otsu).
+  - `OcrEngine` / `TesseractOcrEngine` returns every word with its bounding box, confidence and line, per page.
+- **Output:** all recognized text, page by page. With `--json`, every word with its box and confidence, ready for the `StatementParser`.
+- **Not in this milestone:** `StatementParser` and everything after it, any database or API, and mobile support (added later).
+- **Run locally** on our laptops through a command-line tool, `python -m app.cli`. See [Running it](#running-it).
+
+**Code layout for this milestone**
+
+```
+app/
+  storage/image_store.py               ImageStore (step 1)
+  extraction/image_preprocessor.py     ImagePreprocessor (step 2)
+  extraction/ocr_engine.py             OcrEngine interface, OcrWord, OcrPage (step 3)
+  extraction/tesseract_ocr_engine.py   TesseractOcrEngine (step 3)
+  pipeline.py                          OcrPipeline: runs steps 1-3 in order
+  cli.py                               Command-line entry point
+samples/make_sample_statement.py       Generates a fake statement PDF to test with
+tests/                                 pytest tests for each stage
+```
+
+### Running it
+
+One-time setup (macOS):
+
+```sh
+# 1. Install Homebrew if you don't have it (https://brew.sh), then Tesseract
+brew install tesseract
+
+# 2. From the repo folder, create a virtual environment and install packages
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+One-time setup (Windows, PowerShell):
+
+```powershell
+# 1. Install Tesseract with the UB Mannheim installer:
+#    https://github.com/UB-Mannheim/tesseract/wiki
+#    and tick "Add to PATH" (or add C:\Program Files\Tesseract-OCR to PATH)
+
+# 2. From the repo folder
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Every time (after `source .venv/bin/activate`, or `.venv\Scripts\Activate.ps1` on Windows):
+
+```sh
+python samples/make_sample_statement.py               # creates samples/sample_statement.pdf (fake data)
+python -m app.cli samples/sample_statement.pdf        # print all text
+python -m app.cli samples/sample_statement.pdf --json # words with boxes and confidence
+python -m pytest                                      # run the tests
+```
 
 ## Decisions
 
@@ -84,10 +149,10 @@ One class at a time, each with tests before moving on.
 
 ## Before we start
 
-- Install Tesseract (`brew install tesseract` on macOS, the UB Mannheim installer on Windows) and `pip install pytesseract`.
-- Pick one bank and collect sample statement PNGs.
+- Install Tesseract and the Python packages: see [Running it](#running-it).
+- Pick one bank and collect sample statement PDFs.
 - **This repo is public.** Sample statements must be fake or redacted, and `data/uploads` must be in `.gitignore` from the first commit. Never commit real account numbers.
 
 ## Out of scope for the MVP
 
-Receipts, invoice tracking, PDF support, rent tracking, payroll, login and roles, and the frontend. Each builds on this pipeline, so getting statement PNGs right first means the rest reuses it.
+Receipts, invoice tracking, rent tracking, payroll, login and roles, mobile support, and the frontend. Each builds on this pipeline, so getting statement PDFs right first means the rest reuses it.

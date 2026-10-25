@@ -1,0 +1,12 @@
+# Real financial documents. Never commit these.
+data/uploads/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.vscode/
