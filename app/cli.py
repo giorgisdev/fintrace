@@ -1,8 +1,9 @@
-"""Command-line entry point for running OCR on a PDF from your laptop.
+"""Command-line entry point for running OCR on a PDF or JPEG from your laptop.
 
 Usage:
     python -m app.cli path/to/statement.pdf           # print the text
     python -m app.cli path/to/statement.pdf --json    # print words with boxes and confidence
+    python -m app.cli path/to/statement.jpg           # JPEGs work the same way
 """
 
 from __future__ import annotations
@@ -26,16 +27,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Define and read the command-line options."""
     parser = argparse.ArgumentParser(
         prog="python -m app.cli",
-        description="Extract all text from a PDF using local OCR (Tesseract).",
+        description="Extract all text from a PDF or JPEG using local OCR (Tesseract).",
     )
-    parser.add_argument("pdf", type=Path, help="Path to the PDF file")
+    parser.add_argument("file", type=Path, help="Path to the PDF or JPEG file")
     parser.add_argument(
         "--json",
         action="store_true",
         help="Output every word with its bounding box and confidence, as JSON",
     )
     parser.add_argument(
-        "--dpi", type=int, default=DEFAULT_DPI, help=f"Render resolution (default {DEFAULT_DPI})"
+        "--dpi", type=int, default=DEFAULT_DPI, help=f"PDF render resolution (default {DEFAULT_DPI})"
     )
     parser.add_argument(
         "--store-dir",
@@ -72,8 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     """Run the pipeline and print the result. Returns a process exit code."""
     args = parse_args(argv)
 
-    if not args.pdf.is_file():
-        print(f"error: file not found: {args.pdf}", file=sys.stderr)
+    if not args.file.is_file():
+        print(f"error: file not found: {args.file}", file=sys.stderr)
         return 1
 
     try:
@@ -82,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
             preprocessor=ImagePreprocessor(dpi=args.dpi),
             engine=TesseractOcrEngine(),
         )
-        result = pipeline.run(args.pdf)
+        result = pipeline.run(args.file)
     except (TesseractNotInstalledError, UnsupportedFileError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

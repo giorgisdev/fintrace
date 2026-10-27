@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import pymupdf
 import pytest
+from PIL import Image
 
 from app.extraction.image_preprocessor import ImagePreprocessor
 
@@ -52,6 +53,43 @@ def test_estimates_and_corrects_skew(make_pdf, tilt):
     assert pre.estimate_skew(tilted) == pytest.approx(tilt, abs=0.2)
     page = pre.process_image(tilted)
     assert page.skew_degrees == pytest.approx(tilt, abs=0.2)
+
+
+def test_jpeg_becomes_one_black_and_white_page(make_jpeg):
+    jpeg = make_jpeg(["Opening balance 5,000.00"], dpi=250)  # 2125 px wide
+    pages = ImagePreprocessor().process_jpeg(jpeg)
+
+    assert len(pages) == 1
+    assert pages[0].page_number == 1
+    assert pages[0].image.shape == (2750, 2125)  # Already wide enough: not resized.
+    assert set(np.unique(pages[0].image)) <= {0, 255}
+
+
+def test_small_jpeg_is_upscaled(make_jpeg):
+    jpeg = make_jpeg(["Opening balance 5,000.00"], dpi=100)  # 850 x 1100 px
+    page = ImagePreprocessor().process_jpeg(jpeg)[0]
+    assert page.image.shape[1] == 2000
+    assert page.image.shape[0] == pytest.approx(1100 * 2000 / 850, abs=1)
+
+
+def test_jpeg_exif_rotation_is_applied(tmp_path):
+    # A landscape-shaped image tagged "rotate 90 degrees", like a phone photo.
+    path = tmp_path / "phone.jpg"
+    exif = Image.Exif()
+    exif[0x0112] = 6  # EXIF Orientation tag: rotate 90 degrees clockwise to view.
+    Image.new("L", (300, 200), color=255).save(path, exif=exif)
+
+    gray = ImagePreprocessor.load_image(path)
+
+    assert gray.shape == (300, 200)  # Now portrait: height 300, width 200.
+
+
+def test_process_file_picks_method_by_extension(make_pdf, make_jpeg):
+    pre = ImagePreprocessor(dpi=100)
+    assert len(pre.process_file(make_pdf([["a"], ["b"]]))) == 2
+    assert len(pre.process_file(make_jpeg(["a"]))) == 1
+    with pytest.raises(ValueError):
+        pre.process_file("notes.txt")
 
 
 def test_blank_page_has_no_skew():

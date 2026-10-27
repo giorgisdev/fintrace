@@ -62,3 +62,17 @@ def test_end_to_end_reads_text_from_pdf(tmp_path, make_pdf):
     assert "1,240.50" in result.pages[0].text
     assert "Closing balance 5,557.43" in result.pages[1].text
     assert all(w.confidence > 50 for p in result.pages for w in p.words)
+
+
+@needs_tesseract
+def test_end_to_end_reads_text_from_jpeg(tmp_path, make_jpeg):
+    # 150 DPI is below MIN_IMAGE_WIDTH, so this also runs through upscaling.
+    jpeg = make_jpeg(["Payroll J. Smith 1,600.00", "Closing balance 5,557.43"])
+    pipeline = OcrPipeline(ImageStore(tmp_path / "uploads"), ImagePreprocessor(), TesseractOcrEngine())
+
+    result = pipeline.run(jpeg)
+
+    assert result.stored.path.suffix == ".jpg"
+    assert len(result.pages) == 1
+    assert "Payroll J. Smith 1,600.00" in result.pages[0].text
+    assert "Closing balance 5,557.43" in result.pages[0].text

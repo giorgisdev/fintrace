@@ -18,7 +18,7 @@ from app.storage.image_store import ImageStore, StoredFile
 
 @dataclass(frozen=True)
 class OcrResult:
-    """Everything the OCR stages produced for one uploaded PDF."""
+    """Everything the OCR stages produced for one uploaded PDF or JPEG."""
 
     stored: StoredFile
     pages: list[OcrPage]
@@ -44,11 +44,12 @@ class OcrPipeline:
         self.preprocessor = preprocessor
         self.engine = engine
 
-    def run(self, pdf_path: Path | str) -> OcrResult:
-        """Store the PDF, preprocess each page, and OCR it."""
-        stored = self.store.save(pdf_path)
+    def run(self, path: Path | str) -> OcrResult:
+        """Store the PDF or JPEG, preprocess each page, and OCR it."""
+        stored = self.store.save(path)
         # Work from the stored copy, so what we OCR is exactly what we kept.
-        page_images = self.preprocessor.process_pdf(stored.path)
+        # Its extension reflects the real format, so process_file can rely on it.
+        page_images = self.preprocessor.process_file(stored.path)
         pages = [
             self.engine.recognize(page.image, page_number=page.page_number)
             for page in page_images

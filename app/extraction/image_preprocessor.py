@@ -1,10 +1,12 @@
 """ImagePreprocessor: pipeline step 2.
 
-Turns each page of a PDF into a clean black-and-white image that Tesseract can
-read well: render -> grayscale -> deskew -> threshold.
+Turns each page of a PDF, or a JPEG image, into a clean black-and-white image
+that Tesseract can read well:
+  PDF:  render -> grayscale -> deskew -> threshold
+  JPEG: load (fix camera rotation) -> grayscale -> upscale if small -> deskew -> threshold
 
 Statement PDFs are usually clean digital documents, so these steps stay
-minimal. They matter more for scanned PDFs and, later, phone photos.
+minimal. They matter more for scans and photos.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from pathlib import Path
 import cv2
 import pymupdf
 import numpy as np
+from PIL import Image, ImageOps
 
 # Tesseract is tuned for text around 300 DPI. Lower DPI loses small digits;
 # higher DPI is slower without improving accuracy much.
@@ -29,10 +32,17 @@ MAX_SKEW_DEGREES = 10.0
 # Skew is estimated on a downscaled copy of the page to keep it fast.
 SKEW_ESTIMATE_WIDTH = 1000
 
+# JPEGs narrower than this are upscaled before OCR. Tesseract misreads text
+# whose letters are under ~20 pixels tall, which is common in screenshots.
+# 2000 px is roughly a letter-size page at 235 DPI.
+MIN_IMAGE_WIDTH = 2000
+
+JPEG_EXTENSIONS = (".jpg", ".jpeg")
+
 
 @dataclass(frozen=True)
 class PageImage:
-    """One preprocessed PDF page, ready for OCR."""
+    """One preprocessed page (a PDF page or a whole image), ready for OCR."""
 
     page_number: int  # 1-based, matching how people refer to pages.
     image: np.ndarray  # 2D uint8 array: 0 = black ink, 255 = white paper.
@@ -40,11 +50,52 @@ class PageImage:
 
 
 class ImagePreprocessor:
-    """Renders PDF pages to images and cleans them up for OCR."""
+    """Turns PDFs and JPEGs into page images cleaned up for OCR."""
 
     def __init__(self, dpi: int = DEFAULT_DPI, deskew: bool = True) -> None:
         self.dpi = dpi
         self.deskew_enabled = deskew
+
+    def process_file(self, path: Path | str) -> list[PageImage]:
+        """Preprocess a PDF or JPEG, choosing the method by file extension.
+
+        Meant for files from the ImageStore, whose extension has already been
+        set from the file's actual contents.
+        """
+        suffix = Path(path).suffix.lower()
+        if suffix == ".pdf":
+            return self.process_pdf(path)
+        if suffix in JPEG_EXTENSIONS:
+            return self.process_jpeg(path)
+        raise ValueError(f"Don't know how to preprocess {suffix} files")
+
+    def process_jpeg(self, jpeg_path: Path | str) -> list[PageImage]:
+        """Load and preprocess a JPEG. Returns a one-item list (an image is one page)."""
+        gray = self.load_image(jpeg_path)
+        gray = self.upscale_if_small(gray)
+        return [self.process_image(gray, page_number=1)]
+
+    @staticmethod
+    def load_image(path: Path | str) -> np.ndarray:
+        """Open an image file as an 8-bit grayscale array, upright.
+
+        Phones usually save photos sideways and record the real orientation
+        in EXIF metadata. exif_transpose applies that rotation, otherwise a
+        portrait photo of a statement would reach Tesseract lying on its side.
+        """
+        with Image.open(path) as image:
+            upright = ImageOps.exif_transpose(image)
+            return np.array(upright.convert("L"))
+
+    @staticmethod
+    def upscale_if_small(gray: np.ndarray) -> np.ndarray:
+        """Enlarge images narrower than MIN_IMAGE_WIDTH so text is big enough to read."""
+        width = gray.shape[1]
+        if width >= MIN_IMAGE_WIDTH:
+            return gray
+        scale = MIN_IMAGE_WIDTH / width
+        # Cubic interpolation keeps letter edges smoother than linear when enlarging.
+        return cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
 
     def process_pdf(self, pdf_path: Path | str) -> list[PageImage]:
         """Render and preprocess every page of the PDF, in page order."""
