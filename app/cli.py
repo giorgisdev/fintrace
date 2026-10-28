@@ -1,9 +1,10 @@
-"""Command-line entry point for running OCR on a PDF or JPEG from your laptop.
+"""Command-line entry point for running OCR on a PDF, JPEG or PNG from your laptop.
 
 Usage:
     python -m app.cli path/to/statement.pdf           # print the text
     python -m app.cli path/to/statement.pdf --json    # print words with boxes and confidence
-    python -m app.cli path/to/statement.jpg           # JPEGs work the same way
+    python -m app.cli path/to/statement.jpg           # JPEGs and PNGs work the same way
+    python -m app.cli path/to/statement.png
 """
 
 from __future__ import annotations
@@ -27,9 +28,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Define and read the command-line options."""
     parser = argparse.ArgumentParser(
         prog="python -m app.cli",
-        description="Extract all text from a PDF or JPEG using local OCR (Tesseract).",
+        description="Extract all text from a PDF, JPEG or PNG using local OCR (Tesseract).",
     )
-    parser.add_argument("file", type=Path, help="Path to the PDF or JPEG file")
+    parser.add_argument("file", type=Path, help="Path to the PDF, JPEG or PNG file")
     parser.add_argument(
         "--json",
         action="store_true",

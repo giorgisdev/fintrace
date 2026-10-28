@@ -37,3 +37,17 @@ def make_jpeg(tmp_path: Path, make_pdf):
         return path
 
     return _make
+
+
+@pytest.fixture
+def make_png(tmp_path: Path, make_pdf):
+    """Factory that writes a one-page PNG of the given lines of text."""
+
+    def _make(lines: list[str], name: str = "doc.png", dpi: int = 150) -> Path:
+        pdf = make_pdf([lines], name=f"{name}.source.pdf")
+        path = tmp_path / name
+        with pymupdf.open(pdf) as doc:
+            doc[0].get_pixmap(dpi=dpi).save(path)
+        return path
+
+    return _make

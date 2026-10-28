@@ -4,7 +4,7 @@ Saves the original uploaded file and dedupes it by content hash, so the same
 statement uploaded twice is stored once. The original is kept so every
 transaction we extract later can link back to it.
 
-PDFs and JPEGs are accepted for now. Other formats (PNG, HEIC, DOCX) come later.
+PDFs, JPEGs and PNGs are accepted for now. Other formats (HEIC, DOCX) come later.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from pathlib import Path
 FILE_SIGNATURES = {
     b"%PDF-": ".pdf",
     b"\xff\xd8\xff": ".jpg",  # JPEG; .jpeg and .jpg uploads are both stored as .jpg
+    b"\x89PNG\r\n\x1a\n": ".png",
 }
 SUPPORTED_EXTENSIONS = tuple(FILE_SIGNATURES.values())
 
@@ -50,7 +51,7 @@ class ImageStore:
 
         The stored copy is named after its SHA-256 hash, so two uploads with
         identical bytes map to the same file and the second one is not copied.
-        Raises UnsupportedFileError if the file is not a PDF or JPEG.
+        Raises UnsupportedFileError if the file is not a PDF, JPEG or PNG.
         """
         source = Path(source)
         extension = self._detect_extension(source)
@@ -94,7 +95,7 @@ class ImageStore:
             if header.startswith(signature):
                 return extension
         raise UnsupportedFileError(
-            f"{path.name} is not a PDF or JPEG. Only those are supported for now."
+            f"{path.name} is not a PDF, JPEG or PNG. Only those are supported for now."
         )
 
     @staticmethod

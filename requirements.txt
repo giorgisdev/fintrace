@@ -3,7 +3,7 @@ pymupdf>=1.24
 # Image preprocessing
 opencv-python-headless>=4.9
 numpy>=1.26
-pillow>=10.0
+pillow>=10.1
 # Python wrapper around the Tesseract binary (Tesseract itself is installed separately)
 pytesseract>=0.3.10
 # Tests

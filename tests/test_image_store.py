@@ -38,9 +38,9 @@ def test_different_content_gets_different_hash(tmp_path, make_pdf):
     assert a.sha256 != b.sha256
 
 
-def test_rejects_non_pdf_even_with_pdf_extension(tmp_path):
+def test_rejects_unsupported_file_even_with_pdf_extension(tmp_path):
     fake = tmp_path / "statement.pdf"
-    fake.write_bytes(b"\x89PNG\r\n\x1a\n not really a pdf")
+    fake.write_bytes(b"GIF89a not really a pdf")
     with pytest.raises(UnsupportedFileError):
         ImageStore(tmp_path / "uploads").save(fake)
 
@@ -61,6 +61,17 @@ def test_jpeg_is_detected_by_content_not_extension(tmp_path, make_jpeg):
     misnamed = tmp_path / "statement.pdf"
     misnamed.write_bytes(make_jpeg(["hello"]).read_bytes())
     assert ImageStore(tmp_path / "uploads").save(misnamed).path.suffix == ".jpg"
+
+
+def test_png_is_stored_with_png_extension(tmp_path, make_png):
+    png = make_png(["hello"], name="screenshot.png")
+    store = ImageStore(tmp_path / "uploads")
+
+    stored = store.save(png)
+
+    assert stored.path.suffix == ".png"
+    assert stored.path.read_bytes() == png.read_bytes()
+    assert store.path_for(stored.sha256) == stored.path
 
 
 def test_path_for_unknown_hash_raises(tmp_path):

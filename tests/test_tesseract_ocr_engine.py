@@ -76,3 +76,16 @@ def test_end_to_end_reads_text_from_jpeg(tmp_path, make_jpeg):
     assert len(result.pages) == 1
     assert "Payroll J. Smith 1,600.00" in result.pages[0].text
     assert "Closing balance 5,557.43" in result.pages[0].text
+
+
+@needs_tesseract
+def test_end_to_end_reads_text_from_png(tmp_path, make_png):
+    png = make_png(["Hydro electricity 212.37", "Monthly account fee 15.95"])
+    pipeline = OcrPipeline(ImageStore(tmp_path / "uploads"), ImagePreprocessor(), TesseractOcrEngine())
+
+    result = pipeline.run(png)
+
+    assert result.stored.path.suffix == ".png"
+    assert len(result.pages) == 1
+    assert "Hydro electricity 212.37" in result.pages[0].text
+    assert "Monthly account fee 15.95" in result.pages[0].text

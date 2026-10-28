@@ -57,7 +57,7 @@ def test_estimates_and_corrects_skew(make_pdf, tilt):
 
 def test_jpeg_becomes_one_black_and_white_page(make_jpeg):
     jpeg = make_jpeg(["Opening balance 5,000.00"], dpi=250)  # 2125 px wide
-    pages = ImagePreprocessor().process_jpeg(jpeg)
+    pages = ImagePreprocessor().process_image_file(jpeg)
 
     assert len(pages) == 1
     assert pages[0].page_number == 1
@@ -67,7 +67,7 @@ def test_jpeg_becomes_one_black_and_white_page(make_jpeg):
 
 def test_small_jpeg_is_upscaled(make_jpeg):
     jpeg = make_jpeg(["Opening balance 5,000.00"], dpi=100)  # 850 x 1100 px
-    page = ImagePreprocessor().process_jpeg(jpeg)[0]
+    page = ImagePreprocessor().process_image_file(jpeg)[0]
     assert page.image.shape[1] == 2000
     assert page.image.shape[0] == pytest.approx(1100 * 2000 / 850, abs=1)
 
@@ -84,10 +84,35 @@ def test_jpeg_exif_rotation_is_applied(tmp_path):
     assert gray.shape == (300, 200)  # Now portrait: height 300, width 200.
 
 
-def test_process_file_picks_method_by_extension(make_pdf, make_jpeg):
+def test_png_becomes_one_black_and_white_page(make_png):
+    png = make_png(["Opening balance 5,000.00"], dpi=250)  # 2125 px wide
+    pages = ImagePreprocessor().process_image_file(png)
+
+    assert len(pages) == 1
+    assert pages[0].image.shape == (2750, 2125)
+    assert set(np.unique(pages[0].image)) <= {0, 255}
+
+
+def test_png_transparency_becomes_white(tmp_path):
+    # Black text on a fully transparent background, like many screenshots.
+    # Each transparent pixel's hidden colour is black too, so ignoring the
+    # alpha channel would turn the whole image black.
+    path = tmp_path / "transparent.png"
+    image = Image.new("RGBA", (200, 100), (0, 0, 0, 0))
+    image.paste((0, 0, 0, 255), (20, 40, 180, 60))  # an opaque black bar
+    image.save(path)
+
+    gray = ImagePreprocessor.load_image(path)
+
+    assert gray[5, 5] == 255  # Transparent corner -> white paper.
+    assert gray[50, 100] == 0  # Opaque black bar stays black.
+
+
+def test_process_file_picks_method_by_extension(make_pdf, make_jpeg, make_png):
     pre = ImagePreprocessor(dpi=100)
     assert len(pre.process_file(make_pdf([["a"], ["b"]]))) == 2
     assert len(pre.process_file(make_jpeg(["a"]))) == 1
+    assert len(pre.process_file(make_png(["a"]))) == 1
     with pytest.raises(ValueError):
         pre.process_file("notes.txt")
 
