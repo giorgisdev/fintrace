@@ -1,6 +1,6 @@
 # Scaffold
 
-The plan for the Fintrace MVP: reading numbers off bank statements and turning them into structured, searchable transactions. We start with PDF, JPEG and PNG statements (see [Current milestone](#current-milestone-pdf-jpeg-and-png-ocr)). This file covers the OCR tech stack, the pipeline and the build order. Receipts, invoices, payroll, login, mobile and the frontend come later.
+The plan for the Fintrace MVP: reading numbers off bank statements and turning them into structured, searchable transactions. We start with PDF, JPEG, PNG and HEIC statements (see [Current milestone](#current-milestone-pdf-jpeg-png-and-heic-ocr)). This file covers the OCR tech stack, the pipeline and the build order. Receipts, invoices, payroll, login, mobile and the frontend come later.
 
 ## Goal of the MVP
 
@@ -45,19 +45,20 @@ Upload -> ImageStore -> ImagePreprocessor -> OcrEngine -> StatementParser -> Tra
 6. **Repositories:** the only layer that talks to the database, so storage can change without touching the logic above it.
 7. **API:** thin routes that call a `DocumentService`.
 
-## Current milestone: PDF, JPEG and PNG OCR
+## Current milestone: PDF, JPEG, PNG and HEIC OCR
 
-The first working slice of the pipeline: give it a PDF, JPEG or PNG, get back all the text it sees.
+The first working slice of the pipeline: give it a PDF, JPEG, PNG or HEIC, get back all the text it sees.
 
 **Scope**
 
-- **Input:** PDF, JPEG and PNG files only (built in that order). Other formats (HEIC, DOCX, DOC) come later. Files are checked by their contents (the `%PDF-`, JPEG `FF D8 FF` or PNG `89 50 4E 47` signature), not their extension.
+- **Input:** PDF, JPEG, PNG and HEIC files only (built in that order). Other formats (DOCX, DOC) come later. Files are checked by their contents (the `%PDF-`, JPEG `FF D8 FF` or PNG `89 50 4E 47` signature, or for HEIC an `ftyp` box with a HEIC brand such as `heic`), not their extension.
 - **Stages built:** the first three pipeline steps only, `ImageStore -> ImagePreprocessor -> OcrEngine`.
-  - `ImageStore` saves the original to `data/uploads/<sha256>.pdf`, `.jpg` or `.png` and dedupes by content hash.
+  - `ImageStore` saves the original to `data/uploads/<sha256>.pdf`, `.jpg`, `.png` or `.heic` and dedupes by content hash.
   - `ImagePreprocessor` turns the file into page images, then converts to grayscale, deskews (projection-profile search within ±10°) and thresholds (Otsu).
     - PDF: renders every page at 300 DPI with PyMuPDF.
-    - JPEG and PNG: one page. Applies the EXIF orientation so phone photos are upright, and upscales images narrower than 2000 px so small text is big enough for Tesseract.
+    - JPEG, PNG and HEIC: one page. Applies the EXIF orientation so phone photos are upright, and upscales images narrower than 2000 px so small text is big enough for Tesseract.
     - PNG only: transparent areas (common in screenshots) are flattened onto white first, since a plain grayscale conversion would turn them black and hide black text.
+    - HEIC only: decoded with pillow-heif (libheif bundled in the wheel, no system install). HEIC keeps its rotation in the file rather than EXIF, and pillow-heif applies it while decoding.
   - `OcrEngine` / `TesseractOcrEngine` returns every word with its bounding box, confidence and line, per page.
 - **Output:** all recognized text, page by page. With `--json`, every word with its box and confidence, ready for the `StatementParser`.
 - **Not in this milestone:** `StatementParser` and everything after it, any database or API, and mobile support (added later). The pipeline stops at the OCR output: parsing it into transactions will be done by a local AI model fine-tuned on invoices and receipts, which we will build separately.
@@ -109,6 +110,7 @@ Every time (after `source .venv/bin/activate`, or `.venv\Scripts\Activate.ps1` o
 python -m app.cli path/to/statement.pdf          # print all text
 python -m app.cli path/to/statement.jpg          # same for a JPEG
 python -m app.cli path/to/statement.png          # or a PNG
+python -m app.cli path/to/receipt.heic           # or an iPhone HEIC
 python -m app.cli path/to/statement.pdf --json   # words with boxes and confidence
 python -m pytest                                      # run the tests
 ```
@@ -153,9 +155,9 @@ One class at a time, each with tests before moving on.
 ## Before we start
 
 - Install Tesseract and the Python packages: see [Running it](#running-it).
-- Pick one bank and collect sample statement PDFs, JPEGs and PNGs.
+- Pick one bank and collect sample statement PDFs, JPEGs, PNGs and HEICs.
 - **This repo is public.** Sample statements must be fake or redacted, and `data/uploads` must be in `.gitignore` from the first commit. Never commit real account numbers.
 
 ## Out of scope for the MVP
 
-Receipts, invoice tracking, rent tracking, payroll, login and roles, mobile support, and the frontend. Each builds on this pipeline, so getting statement PDFs, JPEGs and PNGs right first means the rest reuses it.
+Receipts, invoice tracking, rent tracking, payroll, login and roles, mobile support, and the frontend. Each builds on this pipeline, so getting statement PDFs, JPEGs, PNGs and HEICs right first means the rest reuses it.

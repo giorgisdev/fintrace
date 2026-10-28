@@ -4,7 +4,7 @@ Saves the original uploaded file and dedupes it by content hash, so the same
 statement uploaded twice is stored once. The original is kept so every
 transaction we extract later can link back to it.
 
-PDFs, JPEGs and PNGs are accepted for now. Other formats (HEIC, DOCX) come later.
+PDFs, JPEGs, PNGs and HEICs are accepted for now. Other formats (DOCX, DOC) come later.
 """
 
 from __future__ import annotations
@@ -22,7 +22,18 @@ FILE_SIGNATURES = {
     b"\xff\xd8\xff": ".jpg",  # JPEG; .jpeg and .jpg uploads are both stored as .jpg
     b"\x89PNG\r\n\x1a\n": ".png",
 }
-SUPPORTED_EXTENSIONS = tuple(FILE_SIGNATURES.values())
+
+# HEIC (iPhone photos) has no fixed signature at the start. It's an ISO media
+# file: bytes 4-8 read "ftyp", followed by 4-byte "brands" naming the formats
+# the file conforms to. MP4 videos and AVIF images use the same layout with
+# other brands, so the brands are what identify HEIC. .heif uploads are HEIC too.
+HEIC_BRANDS = {b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"hevm", b"hevs"}
+HEIC_EXTENSION = ".heic"
+
+SUPPORTED_EXTENSIONS = (*FILE_SIGNATURES.values(), HEIC_EXTENSION)
+
+# Enough of the file's start to hold every signature and a typical ftyp box.
+HEADER_BYTES = 64
 
 
 class UnsupportedFileError(ValueError):
@@ -51,7 +62,7 @@ class ImageStore:
 
         The stored copy is named after its SHA-256 hash, so two uploads with
         identical bytes map to the same file and the second one is not copied.
-        Raises UnsupportedFileError if the file is not a PDF, JPEG or PNG.
+        Raises UnsupportedFileError if the file is not a PDF, JPEG, PNG or HEIC.
         """
         source = Path(source)
         extension = self._detect_extension(source)
@@ -90,13 +101,30 @@ class ImageStore:
     def _detect_extension(path: Path) -> str:
         """Identify the format from the file's first bytes, or reject it."""
         with path.open("rb") as f:
-            header = f.read(max(len(sig) for sig in FILE_SIGNATURES))
+            header = f.read(HEADER_BYTES)
         for signature, extension in FILE_SIGNATURES.items():
             if header.startswith(signature):
                 return extension
+        if ImageStore._is_heic(header):
+            return HEIC_EXTENSION
         raise UnsupportedFileError(
-            f"{path.name} is not a PDF, JPEG or PNG. Only those are supported for now."
+            f"{path.name} is not a PDF, JPEG, PNG or HEIC. Only those are supported for now."
         )
+
+    @staticmethod
+    def _is_heic(header: bytes) -> bool:
+        """True if the header is an ftyp box with a HEIC brand.
+
+        Layout: box size (bytes 0-4), "ftyp" (4-8), major brand (8-12), minor
+        version (12-16), then compatible brands to the end of the box. iPhones
+        set the major brand to "heic"; other cameras may put "mif1" first and
+        list "heic" among the compatible brands, so all of them are checked.
+        """
+        if header[4:8] != b"ftyp":
+            return False
+        box_end = min(int.from_bytes(header[0:4], "big"), len(header))
+        brands = [header[8:12]] + [header[i : i + 4] for i in range(16, box_end, 4)]
+        return any(brand in HEIC_BRANDS for brand in brands)
 
     @staticmethod
     def _hash_file(path: Path) -> str:
