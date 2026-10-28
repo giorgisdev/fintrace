@@ -15,16 +15,24 @@
 
 Helping businesses track numbers across scattered documents. Fintrace turns PDFs and images into searchable, structured transactions, linked to the original file.
 
+## now building
+
+**Fine-tuning Qwen3-0.6B with LoRA for transaction parsing**, trained on our own hand-labelled receipts, invoices and bills. OCR returns every word on the page but not which ones matter; the model picks out the ones that do.
+
+- Reads the OCR text and returns structured fields: vendor, date, amount, order number
+- Small enough to run on-device, so documents stay local
+- Checks every value against the OCR output and sends low-confidence reads to the user for review; corrections become new training data
+
 ## early-stage features
 
-- Document analysis: extract transactions from bank statements, receipts and invoices. PDF first, then other file types (DOCX, PNG, JPG, etc.)
+- Document analysis: extract transactions from bank statements, receipts and invoices. Reads PDF, JPEG, PNG and HEIC. DOCX and DOC next.
 - Invoice tracking: create, track and mark invoices paid
 
 ## status
 
-Working today: a command-line tool that reads a PDF and prints all the text it recognizes, page by page, with each word's position and confidence. It runs locally, so documents never leave your machine.
+Working today: a command-line tool that reads a PDF, JPEG, PNG or HEIC (iPhone photo) and prints all the text it recognizes, page by page, with each word's position and confidence. Files are identified by their contents, not their extension. It runs locally, so documents never leave your machine.
 
-Next: transaction parsing, balance validation, a database and API, more file types, and a frontend. See [`scaffold.md`](scaffold.md) for the plan.
+Next: transaction parsing, balance validation, a database and API, DOCX and DOC support, and a frontend. See [`scaffold.md`](scaffold.md) for the plan.
 
 ## tech stack
 
@@ -34,7 +42,9 @@ Next: transaction parsing, balance validation, a database and API, more file typ
 | OCR | Tesseract (`pytesseract`) | Free, local and accurate on clean documents, so financial data stays on our machines. |
 | Image processing | OpenCV, Pillow | Deskewing and thresholding often improve OCR more than changing the engine. |
 | PDF rendering | PyMuPDF | Installs with pip, with no system dependencies. |
+| HEIC decoding | pillow-heif | Opens iPhone photos with pip alone, no system install. |
 | Tests | pytest | |
+| Field extraction | Qwen3-0.6B, LoRA (PyTorch, Hugging Face Transformers) | Small enough for phones. Apache 2.0 licensed. |
 | Planned | FastAPI, SQLite then PostgreSQL | Lightweight API; a database with no setup that can scale later. |
 
 ## getting started
@@ -51,8 +61,9 @@ pip install -r requirements.txt
 
 ```sh
 python -m app.cli path/to/statement.pdf          # print all recognized text
+python -m app.cli path/to/receipt.jpg            # JPEG, PNG and HEIC work the same way
 python -m app.cli path/to/statement.pdf --json   # every word with its box and confidence
 python -m pytest                                 # run the tests
 ```
 
-`python samples/make_sample_statement.py` generates a fake statement PDF to try it on. Uploaded files are copied to `data/uploads/`, which is git-ignored.
+Uploaded files are copied to `data/uploads/`, which is git-ignored.
