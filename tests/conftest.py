@@ -6,6 +6,10 @@ from pathlib import Path
 
 import pymupdf
 import pytest
+from pillow_heif import register_heif_opener
+
+# Lets Pillow save .heic files for the make_heic fixture.
+register_heif_opener()
 
 
 @pytest.fixture
@@ -48,6 +52,20 @@ def make_png(tmp_path: Path, make_pdf):
         path = tmp_path / name
         with pymupdf.open(pdf) as doc:
             doc[0].get_pixmap(dpi=dpi).save(path)
+        return path
+
+    return _make
+
+
+@pytest.fixture
+def make_heic(tmp_path: Path, make_pdf):
+    """Factory that writes a one-page HEIC of the given lines of text, like an iPhone photo."""
+
+    def _make(lines: list[str], name: str = "doc.heic", dpi: int = 150) -> Path:
+        pdf = make_pdf([lines], name=f"{name}.source.pdf")
+        path = tmp_path / name
+        with pymupdf.open(pdf) as doc:
+            doc[0].get_pixmap(dpi=dpi).pil_image().save(path, quality=90)
         return path
 
     return _make

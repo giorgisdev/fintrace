@@ -1,10 +1,10 @@
 """ImagePreprocessor: pipeline step 2.
 
-Turns each page of a PDF, or a JPEG or PNG image, into a clean black-and-white
-image that Tesseract can read well:
-  PDF:        render -> grayscale -> deskew -> threshold
-  JPEG/PNG:   load (fix camera rotation, flatten transparency) -> grayscale
-              -> upscale if small -> deskew -> threshold
+Turns each page of a PDF, or a JPEG, PNG or HEIC image, into a clean
+black-and-white image that Tesseract can read well:
+  PDF:             render -> grayscale -> deskew -> threshold
+  JPEG/PNG/HEIC:   load (fix camera rotation, flatten transparency) -> grayscale
+                   -> upscale if small -> deskew -> threshold
 
 Statement PDFs are usually clean digital documents, so these steps stay
 minimal. They matter more for scans and photos.
@@ -19,6 +19,10 @@ import cv2
 import pymupdf
 import numpy as np
 from PIL import Image, ImageOps
+from pillow_heif import register_heif_opener
+
+# Teach Pillow to open HEIC, the format iPhones save photos in.
+register_heif_opener()
 
 # Tesseract is tuned for text around 300 DPI. Lower DPI loses small digits;
 # higher DPI is slower without improving accuracy much.
@@ -39,7 +43,7 @@ SKEW_ESTIMATE_WIDTH = 1000
 MIN_IMAGE_WIDTH = 2000
 
 # Single-image formats, handled by process_image_file.
-IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".heic")
 
 
 @dataclass(frozen=True)
@@ -52,14 +56,14 @@ class PageImage:
 
 
 class ImagePreprocessor:
-    """Turns PDFs, JPEGs and PNGs into page images cleaned up for OCR."""
+    """Turns PDFs, JPEGs, PNGs and HEICs into page images cleaned up for OCR."""
 
     def __init__(self, dpi: int = DEFAULT_DPI, deskew: bool = True) -> None:
         self.dpi = dpi
         self.deskew_enabled = deskew
 
     def process_file(self, path: Path | str) -> list[PageImage]:
-        """Preprocess a PDF, JPEG or PNG, choosing the method by file extension.
+        """Preprocess a PDF, JPEG, PNG or HEIC, choosing the method by file extension.
 
         Meant for files from the ImageStore, whose extension has already been
         set from the file's actual contents.
@@ -72,7 +76,7 @@ class ImagePreprocessor:
         raise ValueError(f"Don't know how to preprocess {suffix} files")
 
     def process_image_file(self, image_path: Path | str) -> list[PageImage]:
-        """Load and preprocess a JPEG or PNG. Returns a one-item list (an image is one page)."""
+        """Load and preprocess a JPEG, PNG or HEIC. Returns a one-item list (an image is one page)."""
         gray = self.load_image(image_path)
         gray = self.upscale_if_small(gray)
         return [self.process_image(gray, page_number=1)]
@@ -84,6 +88,8 @@ class ImagePreprocessor:
         Phones usually save photos sideways and record the real orientation
         in EXIF metadata. exif_transpose applies that rotation, otherwise a
         portrait photo of a statement would reach Tesseract lying on its side.
+        HEICs store their rotation in the file itself; pillow-heif applies it
+        while decoding and resets the EXIF orientation, so it isn't rotated twice.
 
         PNGs (often screenshots) can have transparent pixels. Converting
         straight to grayscale would make those black, hiding black text, so

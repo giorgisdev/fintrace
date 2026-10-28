@@ -74,6 +74,45 @@ def test_png_is_stored_with_png_extension(tmp_path, make_png):
     assert store.path_for(stored.sha256) == stored.path
 
 
+def test_heic_is_stored_with_heic_extension(tmp_path, make_heic):
+    heic = make_heic(["hello"], name="IMG_0042.HEIC")
+    store = ImageStore(tmp_path / "uploads")
+
+    stored = store.save(heic)
+
+    assert stored.path.suffix == ".heic"
+    assert stored.path.read_bytes() == heic.read_bytes()
+    assert store.path_for(stored.sha256) == stored.path
+
+
+@pytest.mark.parametrize(
+    "ftyp_box",
+    [
+        b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic",  # iPhone: "heic" is the major brand
+        b"\x00\x00\x00\x18ftypmif1\x00\x00\x00\x00mif1heic",  # "heic" only among compatible brands
+    ],
+)
+def test_heic_is_detected_by_ftyp_brand(tmp_path, ftyp_box):
+    photo = tmp_path / "photo.jpg"
+    photo.write_bytes(ftyp_box + b"\x00" * 64)
+    assert ImageStore(tmp_path / "uploads").save(photo).path.suffix == ".heic"
+
+
+@pytest.mark.parametrize(
+    "ftyp_box",
+    [
+        b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom",  # MP4 video
+        b"\x00\x00\x00\x18ftypavif\x00\x00\x00\x00mif1avif",  # AVIF image
+    ],
+)
+def test_rejects_other_iso_media_files(tmp_path, ftyp_box):
+    # Same ftyp layout as HEIC, but none of the brands are HEIC.
+    video = tmp_path / "clip.heic"
+    video.write_bytes(ftyp_box + b"\x00" * 64)
+    with pytest.raises(UnsupportedFileError):
+        ImageStore(tmp_path / "uploads").save(video)
+
+
 def test_path_for_unknown_hash_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         ImageStore(tmp_path).path_for("0" * 64)

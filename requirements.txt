@@ -4,6 +4,8 @@ pymupdf>=1.24
 opencv-python-headless>=4.9
 numpy>=1.26
 pillow>=10.1
+# HEIC (iPhone photo) support for Pillow, with libheif bundled (no system install)
+pillow-heif>=1.0
 # Python wrapper around the Tesseract binary (Tesseract itself is installed separately)
 pytesseract>=0.3.10
 # Tests

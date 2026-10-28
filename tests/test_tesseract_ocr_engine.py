@@ -89,3 +89,16 @@ def test_end_to_end_reads_text_from_png(tmp_path, make_png):
     assert len(result.pages) == 1
     assert "Hydro electricity 212.37" in result.pages[0].text
     assert "Monthly account fee 15.95" in result.pages[0].text
+
+
+@needs_tesseract
+def test_end_to_end_reads_text_from_heic(tmp_path, make_heic):
+    heic = make_heic(["Rogers wireless 801.15", "Due date Nov 14 2026"])
+    pipeline = OcrPipeline(ImageStore(tmp_path / "uploads"), ImagePreprocessor(), TesseractOcrEngine())
+
+    result = pipeline.run(heic)
+
+    assert result.stored.path.suffix == ".heic"
+    assert len(result.pages) == 1
+    assert "Rogers wireless 801.15" in result.pages[0].text
+    assert "Due date Nov 14 2026" in result.pages[0].text

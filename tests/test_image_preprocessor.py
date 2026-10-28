@@ -108,11 +108,21 @@ def test_png_transparency_becomes_white(tmp_path):
     assert gray[50, 100] == 0  # Opaque black bar stays black.
 
 
-def test_process_file_picks_method_by_extension(make_pdf, make_jpeg, make_png):
+def test_heic_becomes_one_black_and_white_page(make_heic):
+    heic = make_heic(["Opening balance 5,000.00"], dpi=250)  # 2125 px wide
+    pages = ImagePreprocessor().process_image_file(heic)
+
+    assert len(pages) == 1
+    assert pages[0].image.shape == (2750, 2125)
+    assert set(np.unique(pages[0].image)) <= {0, 255}
+
+
+def test_process_file_picks_method_by_extension(make_pdf, make_jpeg, make_png, make_heic):
     pre = ImagePreprocessor(dpi=100)
     assert len(pre.process_file(make_pdf([["a"], ["b"]]))) == 2
     assert len(pre.process_file(make_jpeg(["a"]))) == 1
     assert len(pre.process_file(make_png(["a"]))) == 1
+    assert len(pre.process_file(make_heic(["a"]))) == 1
     with pytest.raises(ValueError):
         pre.process_file("notes.txt")
 
