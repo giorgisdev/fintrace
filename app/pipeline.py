@@ -2,12 +2,15 @@
 
 Upload -> ImageStore -> ImagePreprocessor -> OcrEngine
 
+An upload is one file or a batch of files (e.g. everything in a folder).
+
 The later stages (StatementParser, TransactionValidator, Repositories, API)
 will plug in after OCR. A DocumentService will eventually own this flow.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +32,19 @@ class OcrResult:
         return "\n\n".join(
             f"--- Page {page.page_number} ---\n{page.text}" for page in self.pages
         )
+
+
+@dataclass(frozen=True)
+class BatchItem:
+    """The outcome for one file in a batch: either a result or an error."""
+
+    source: Path  # The file as the user gave it.
+    result: OcrResult | None = None
+    error: str | None = None  # Why the file failed, if it did.
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
 
 
 class OcrPipeline:
@@ -55,3 +71,17 @@ class OcrPipeline:
             for page in page_images
         ]
         return OcrResult(stored=stored, pages=pages)
+
+    def run_many(self, paths: Iterable[Path | str]) -> Iterator[BatchItem]:
+        """Run each file through the pipeline, yielding results one at a time.
+
+        Yielding (rather than returning a list at the end) lets the caller
+        show progress and print each file's text as soon as it's ready.
+        """
+        for path in paths:
+            try:
+                yield BatchItem(source=Path(path), result=self.run(path))
+            except Exception as error:  # noqa: BLE001
+                # A corrupt or unreadable file shouldn't stop the whole batch,
+                # so any failure is recorded against that file and we move on.
+                yield BatchItem(source=Path(path), error=f"{type(error).__name__}: {error}")

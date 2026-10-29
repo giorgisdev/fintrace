@@ -52,6 +52,10 @@ The first working slice of the pipeline: give it a PDF, JPEG, PNG or HEIC, get b
 **Scope**
 
 - **Input:** PDF, JPEG, PNG and HEIC files only (built in that order). Other formats (DOCX, DOC) come later. Files are checked by their contents (the `%PDF-`, JPEG `FF D8 FF` or PNG `89 50 4E 47` signature, or for HEIC an `ftyp` box with a HEIC brand such as `heic`), not their extension.
+- **Bulk input:** the input can also be a folder (or any mix of files and folders), so users can upload many documents at once.
+  - Every supported file inside is OCR'd, including subfolders (`--no-recursive` to stay in the top folder). Files are picked by content, like single uploads, so a folder can be used as-is.
+  - Unsupported files are skipped and listed. Hidden files and folders (`.DS_Store` and similar) are ignored.
+  - One bad file doesn't stop the batch: its error is recorded and the rest carry on. A summary at the end lists files read, duplicates already stored, failures and skips.
 - **Stages built:** the first three pipeline steps only, `ImageStore -> ImagePreprocessor -> OcrEngine`.
   - `ImageStore` saves the original to `data/uploads/<sha256>.pdf`, `.jpg`, `.png` or `.heic` and dedupes by content hash.
   - `ImagePreprocessor` turns the file into page images, then converts to grayscale, deskews (projection-profile search within ±10°) and thresholds (Otsu).
@@ -60,7 +64,7 @@ The first working slice of the pipeline: give it a PDF, JPEG, PNG or HEIC, get b
     - PNG only: transparent areas (common in screenshots) are flattened onto white first, since a plain grayscale conversion would turn them black and hide black text.
     - HEIC only: decoded with pillow-heif (libheif bundled in the wheel, no system install). HEIC keeps its rotation in the file rather than EXIF, and pillow-heif applies it while decoding.
   - `OcrEngine` / `TesseractOcrEngine` returns every word with its bounding box, confidence and line, per page.
-- **Output:** all recognized text, page by page. With `--json`, every word with its box and confidence, ready for the `StatementParser`.
+- **Output:** all recognized text, page by page. With `--json`, every word with its box and confidence, ready for the `StatementParser`. For a batch, text is printed per file under a `===== path =====` header, and `--json` returns `{"files": [{"source", "error", "result"}], "skipped": [...]}`.
 - **Not in this milestone:** `StatementParser` and everything after it, any database or API, and mobile support (added later). The pipeline stops at the OCR output: parsing it into transactions will be done by a local AI model fine-tuned on invoices and receipts, which we will build separately.
 - **Run locally** on our laptops through a command-line tool, `python -m app.cli`. See [Running it](#running-it).
 
@@ -69,10 +73,11 @@ The first working slice of the pipeline: give it a PDF, JPEG, PNG or HEIC, get b
 ```
 app/
   storage/image_store.py               ImageStore (step 1)
+  storage/folder_scanner.py            Finds supported files in a folder (bulk input)
   extraction/image_preprocessor.py     ImagePreprocessor (step 2)
   extraction/ocr_engine.py             OcrEngine interface, OcrWord, OcrPage (step 3)
   extraction/tesseract_ocr_engine.py   TesseractOcrEngine (step 3)
-  pipeline.py                          OcrPipeline: runs steps 1-3 in order
+  pipeline.py                          OcrPipeline: runs steps 1-3 in order, for one file or a batch
   cli.py                               Command-line entry point
 tests/                                 pytest tests for each stage
 ```
@@ -112,6 +117,8 @@ python -m app.cli path/to/statement.jpg          # same for a JPEG
 python -m app.cli path/to/statement.png          # or a PNG
 python -m app.cli path/to/receipt.heic           # or an iPhone HEIC
 python -m app.cli path/to/statement.pdf --json   # words with boxes and confidence
+python -m app.cli path/to/folder                 # bulk: every supported file in the folder
+python -m app.cli a.pdf b.png path/to/folder     # any mix of files and folders
 python -m pytest                                      # run the tests
 ```
 
