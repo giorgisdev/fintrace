@@ -98,6 +98,16 @@ class ImageStore:
         raise FileNotFoundError(f"No stored file with hash {sha256}")
 
     @staticmethod
+    def is_supported(path: Path | str) -> bool:
+        """True if the file is a format we can process, judged by its contents."""
+        try:
+            ImageStore._detect_extension(Path(path))
+        except (UnsupportedFileError, OSError):
+            # OSError covers files we can't open, e.g. no read permission.
+            return False
+        return True
+
+    @staticmethod
     def _detect_extension(path: Path) -> str:
         """Identify the format from the file's first bytes, or reject it."""
         with path.open("rb") as f:

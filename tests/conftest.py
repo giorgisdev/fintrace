@@ -23,6 +23,7 @@ def make_pdf(tmp_path: Path):
             for i, line in enumerate(lines):
                 page.insert_text((72, 100 + i * 24), line, fontsize=14)
         path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         doc.save(path)
         return path
 
@@ -34,7 +35,7 @@ def make_jpeg(tmp_path: Path, make_pdf):
     """Factory that writes a one-page JPEG of the given lines of text."""
 
     def _make(lines: list[str], name: str = "doc.jpg", dpi: int = 150) -> Path:
-        pdf = make_pdf([lines], name=f"{name}.source.pdf")
+        pdf = make_pdf([lines], name=f"_sources/{name}.pdf")
         path = tmp_path / name
         with pymupdf.open(pdf) as doc:
             doc[0].get_pixmap(dpi=dpi).save(path, jpg_quality=90)
@@ -48,7 +49,7 @@ def make_png(tmp_path: Path, make_pdf):
     """Factory that writes a one-page PNG of the given lines of text."""
 
     def _make(lines: list[str], name: str = "doc.png", dpi: int = 150) -> Path:
-        pdf = make_pdf([lines], name=f"{name}.source.pdf")
+        pdf = make_pdf([lines], name=f"_sources/{name}.pdf")
         path = tmp_path / name
         with pymupdf.open(pdf) as doc:
             doc[0].get_pixmap(dpi=dpi).save(path)
@@ -62,7 +63,7 @@ def make_heic(tmp_path: Path, make_pdf):
     """Factory that writes a one-page HEIC of the given lines of text, like an iPhone photo."""
 
     def _make(lines: list[str], name: str = "doc.heic", dpi: int = 150) -> Path:
-        pdf = make_pdf([lines], name=f"{name}.source.pdf")
+        pdf = make_pdf([lines], name=f"_sources/{name}.pdf")
         path = tmp_path / name
         with pymupdf.open(pdf) as doc:
             doc[0].get_pixmap(dpi=dpi).pil_image().save(path, quality=90)
