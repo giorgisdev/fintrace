@@ -1,5 +1,5 @@
 # Real financial documents. Never commit these.
-data/uploads/
+data/
 
 # Python
 .venv/

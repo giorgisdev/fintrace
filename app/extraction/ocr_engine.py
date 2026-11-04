@@ -61,6 +61,11 @@ class OcrPage:
 class OcrEngine(ABC):
     """Interface every OCR backend implements."""
 
+    # Saved alongside OCR output, so results from another engine or version
+    # can be recognized as out of date.
+    name = "unknown"
+    version = "unknown"
+
     @abstractmethod
     def recognize(self, image: np.ndarray, page_number: int = 1) -> OcrPage:
         """Read all the words in a preprocessed page image."""

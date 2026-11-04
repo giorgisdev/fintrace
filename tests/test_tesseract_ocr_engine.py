@@ -102,3 +102,10 @@ def test_end_to_end_reads_text_from_heic(tmp_path, make_heic):
     assert len(result.pages) == 1
     assert "Rogers wireless 801.15" in result.pages[0].text
     assert "Due date Nov 14 2026" in result.pages[0].text
+
+
+@needs_tesseract
+def test_reports_its_name_and_installed_version():
+    engine = TesseractOcrEngine()
+    assert engine.name == "tesseract"
+    assert engine.version[0].isdigit()
