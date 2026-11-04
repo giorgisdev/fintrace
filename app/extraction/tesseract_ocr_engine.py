@@ -22,6 +22,8 @@ class TesseractNotInstalledError(RuntimeError):
 class TesseractOcrEngine(OcrEngine):
     """Runs Tesseract locally. Documents never leave the machine."""
 
+    name = "tesseract"
+
     def __init__(self, language: str = "eng", page_segmentation_mode: int = 6) -> None:
         # Page segmentation mode 6 = "assume a single uniform block of text".
         # It keeps each table row on one line, which suits statements better
@@ -29,6 +31,11 @@ class TesseractOcrEngine(OcrEngine):
         self.language = language
         self.config = f"--psm {page_segmentation_mode}"
         self._check_installed()
+
+    @property
+    def version(self) -> str:
+        """The installed Tesseract version."""
+        return str(pytesseract.get_tesseract_version())
 
     def recognize(self, image: np.ndarray, page_number: int = 1) -> OcrPage:
         """Run Tesseract on one page and return its words with boxes and scores."""

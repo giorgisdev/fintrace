@@ -67,7 +67,7 @@ class ImageStore:
         source = Path(source)
         extension = self._detect_extension(source)
 
-        digest = self._hash_file(source)
+        digest = self.hash_file(source)
         destination = self.root / f"{digest}{extension}"
 
         is_new = not destination.exists()
@@ -137,7 +137,7 @@ class ImageStore:
         return any(brand in HEIC_BRANDS for brand in brands)
 
     @staticmethod
-    def _hash_file(path: Path) -> str:
+    def hash_file(path: Path) -> str:
         """SHA-256 of the file, read in chunks so large files don't fill memory."""
         hasher = hashlib.sha256()
         with path.open("rb") as f:

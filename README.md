@@ -63,6 +63,7 @@ pip install -r requirements.txt
 python -m app.cli path/to/statement.pdf          # print all recognized text
 python -m app.cli path/to/receipt.jpg            # JPEG, PNG and HEIC work the same way
 python -m app.cli path/to/statement.pdf --json   # every word with its box and confidence
+python -m app.cli path/to/folder --out data/ocr  # save one JSON per document, skipping any already saved
 python -m pytest                                 # run the tests
 ```
 

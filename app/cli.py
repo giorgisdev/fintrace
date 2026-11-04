@@ -8,6 +8,7 @@ Usage:
     python -m app.cli path/to/receipt.heic
     python -m app.cli path/to/folder                  # bulk: every supported file in the folder
     python -m app.cli a.pdf b.png path/to/folder      # any mix of files and folders
+    python -m app.cli path/to/folder --out data/ocr   # save one JSON per document
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from app.extraction.tesseract_ocr_engine import (
 from app.pipeline import BatchItem, OcrPipeline, OcrResult
 from app.storage.folder_scanner import scan_folder
 from app.storage.image_store import ImageStore
+from app.storage.ocr_cache import OcrCache, OcrSettings, find_name_clashes
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -44,10 +46,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="path",
         help="A PDF, JPEG, PNG or HEIC file, or a folder of them",
     )
-    parser.add_argument(
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument(
         "--json",
         action="store_true",
         help="Output every word with its bounding box and confidence, as JSON",
+    )
+    output.add_argument(
+        "--out",
+        type=Path,
+        metavar="DIR",
+        help="Save one JSON per document in this folder, skipping any already saved",
     )
     parser.add_argument(
         "--no-recursive",
@@ -139,6 +148,39 @@ def print_summary(items: list[BatchItem], skipped: list[Path]) -> None:
         print(f"  skipped: {path}", file=sys.stderr)
 
 
+def save_results(
+    pipeline: OcrPipeline, cache: OcrCache, files: list[Path], skipped: list[Path]
+) -> int:
+    """OCR the files into one JSON each, reusing saved results. Returns an exit code."""
+    # A file named directly can also be inside a folder passed alongside it.
+    files = list({path.resolve(): path for path in files}.values())
+
+    clashes = find_name_clashes(files)
+    if clashes:
+        for group in clashes:
+            names = ", ".join(str(path) for path in group)
+            print(f"error: these would save to the same output file: {names}", file=sys.stderr)
+        return 1
+
+    pending = [path for path in files if not cache.is_fresh(path)]
+    items: list[BatchItem] = []
+    for index, item in enumerate(pipeline.run_many(pending), start=1):
+        items.append(item)
+        print(f"[{index}/{len(pending)}] {item.source}", file=sys.stderr)
+        # Save as each file finishes, so a crash keeps everything done so far.
+        if item.ok:
+            cache.save(item.source, item.result)
+        else:
+            print(f"  error: {item.error}", file=sys.stderr)
+
+    print_summary(items, skipped)
+    print(
+        f"[{len(files) - len(pending)} already saved; results in {cache.directory}]",
+        file=sys.stderr,
+    )
+    return 0 if all(item.ok for item in items) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the pipeline and print the results. Returns a process exit code."""
     args = parse_args(argv)
@@ -155,14 +197,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        pipeline = OcrPipeline(
-            store=ImageStore(args.store_dir),
-            preprocessor=ImagePreprocessor(dpi=args.dpi),
-            engine=TesseractOcrEngine(),
-        )
+        engine = TesseractOcrEngine()
     except TesseractNotInstalledError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    pipeline = OcrPipeline(
+        store=ImageStore(args.store_dir),
+        preprocessor=ImagePreprocessor(dpi=args.dpi),
+        engine=engine,
+    )
+
+    if args.out:
+        cache = OcrCache(args.out, OcrSettings(engine.name, engine.version, args.dpi))
+        return save_results(pipeline, cache, files, skipped)
 
     # A single file named directly keeps the simple output: just its text (or
     # its JSON object). Anything more is a batch, with a header per file.

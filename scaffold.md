@@ -119,6 +119,7 @@ python -m app.cli path/to/receipt.heic           # or an iPhone HEIC
 python -m app.cli path/to/statement.pdf --json   # words with boxes and confidence
 python -m app.cli path/to/folder                 # bulk: every supported file in the folder
 python -m app.cli a.pdf b.png path/to/folder     # any mix of files and folders
+python -m app.cli path/to/folder --out data/ocr  # save one JSON per document, skipping any already saved
 python -m pytest                                      # run the tests
 ```
 
