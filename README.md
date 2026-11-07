@@ -4,6 +4,8 @@
 
 > early development
 
+[![tests](https://github.com/giorgisdev/fintrace/actions/workflows/tests.yml/badge.svg)](https://github.com/giorgisdev/fintrace/actions/workflows/tests.yml)
+
 **Vision:** Bookkeeping software for local businesses. Upload receipts, invoices, bank statements and other transactional documents. Fintrace extracts data from image files and PDFs to automate the process of calculating expenses and payroll.
 
 ## team
